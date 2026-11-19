@@ -4,6 +4,20 @@
 set -euo pipefail
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 fail() { echo "东皇钟：$*" >&2; exit 1; }
+trusted_command_paths() {
+  local path mode
+  for path in /usr /usr/bin /usr/local /usr/local/bin /usr/local/share /usr/local/share/donghuang-host; do
+    if [ -L "$path" ]; then fail "管理命令目录是符号链接：$path"; fi
+    [ -e "$path" ] || continue
+    mode=$(stat -c '%a' -- "$path")
+    [ -d "$path" ] && [ "$(stat -c '%u' -- "$path")" = 0 ] && (( (8#$mode & 022) == 0 )) || fail "管理命令目录必须由 root 所有且不可由其他用户写入：$path"
+  done
+  for path in /usr/bin/donghuang /usr/local/bin/donghuang; do
+    [ ! -L "$path" ] || fail "其他程序的同名链接，未覆盖：$path"
+    [ -e "$path" ] || continue
+    [ -f "$path" ] && [ "$(stat -c '%u:%a:%h' -- "$path")" = 0:755:1 ] || fail "同名命令所有者、权限或链接数异常，未覆盖：$path"
+  done
+}
 version_ok() { [[ $1 =~ ^v(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$ ]]; }
 older() { [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]; }
 fetch() { curl --disable --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --connect-timeout 12 --max-time 240 --retry 2 --max-filesize "$3" -o "$2" "$1"; }
@@ -35,6 +49,7 @@ install_main() {
     *) fail "未知选项：$1";; esac; done
   [ "$(uname -s)" = Linux ] && [ -r /etc/os-release ] && [ -d /run/systemd/system ] || fail '需要运行 systemd 的 Linux 服务器，不支持普通 Docker 容器、macOS 或 Windows'
   [ "$(id -u)" = 0 ] || fail '请使用 sudo bash 运行安装器；已是 root 时可省略 sudo'
+  trusted_command_paths
   . /etc/os-release
   local family arch
   case "$ID" in ubuntu|debian) family=deb;; alinux|anolis|rocky|almalinux|rhel|centos|fedora) family=rpm;; *) fail "尚不支持 ${PRETTY_NAME:-$ID}";; esac
@@ -82,7 +97,7 @@ KEY
   if ! command -v openssl >/dev/null; then $check && fail '只读检查需要 openssl'; packages openssl; fi
   openssl dgst -sha256 -verify "$work/key.pem" -signature "$work/CHANNEL.sig" "$work/CHANNEL" >/dev/null || fail '发布签名无效，未安装'
   [ "$(wc -l < "$work/CHANNEL")" -eq 3 ] || fail '发布清单格式错误'
-  mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.61 || fail '版本低于公开发行下限'
+  mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.62 || fail '版本低于公开发行下限'
   [ "$requested" = latest ] || [ "$requested" = "$version" ] || fail '固定版本与签名不符'
   [ -z "$installed" ] || ! older "$version" "$installed" || fail '不允许自动降级，请使用本机备份恢复流程'
   for v in 1 2; do
@@ -150,4 +165,4 @@ PY
     install -m 0644 /dev/null "$share/public-channel"
   fi
 }
-install_main "$@"
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then install_main "$@"; fi
