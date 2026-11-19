@@ -1,5 +1,7 @@
 # 东皇钟 · Linux 主机安全
 
+当前稳定版：[v0.1.62](https://github.com/1994qrq/donghuang-releases/releases/tag/v0.1.62) · [实测系统和安装占用](COMPATIBILITY.md)
+
 在 Linux 服务器的 SSH 终端安装。安装器识别发行版和 CPU，只下载对应的官方包。服务器不需要 GitHub 账号、Docker、Go 或 Node.js。
 
 ```bash
