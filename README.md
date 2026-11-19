@@ -1,6 +1,6 @@
 # 东皇钟 · Linux 主机安全
 
-当前稳定版：[v0.1.62](https://github.com/1994qrq/donghuang-releases/releases/tag/v0.1.62) · [实测系统和安装占用](COMPATIBILITY.md)
+当前稳定版：[v0.1.63](https://github.com/1994qrq/donghuang-releases/releases/tag/v0.1.63) · [实测系统和安装占用](COMPATIBILITY.md)
 
 在 Linux 服务器的 SSH 终端安装。安装器识别发行版和 CPU，只下载对应的官方包。服务器不需要 GitHub 账号、Docker、Go 或 Node.js。
 
@@ -8,7 +8,7 @@
 curl -fsSLo donghuang-install.sh https://raw.githubusercontent.com/1994qrq/donghuang-releases/main/install.sh && sudo bash donghuang-install.sh
 ```
 
-请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定发行版可用 `--version v0.1.62`。每个发布页也提供固定到 Git commit 的安装命令。安装器内置 P-256 公钥，核验签名后才使用程序包；公钥 SHA-256（DER SPKI）是 `9d6b42d855aa64bcc61d49c34dbe206ecc425472ceb868b6ac7074c9cd373a95`。签名公钥更换时需要重新获取官方入口，离线保存的旧入口不会自行获得吊销信息。
+请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定发行版可用 `--version v0.1.63`。每个发布页也提供固定到 Git commit 的安装命令。安装器内置 P-256 公钥，核验签名后才使用程序包；公钥 SHA-256（DER SPKI）是 `9d6b42d855aa64bcc61d49c34dbe206ecc425472ceb868b6ac7074c9cd373a95`。签名公钥更换时需要重新获取官方入口，离线保存的旧入口不会自行获得吊销信息。
 
 **先看本机能否安装：** 下载最新的 `donghuang-install.sh` 后运行 `bash donghuang-install.sh --doctor`。诊断本身不联网、不安装、不需要 `sudo`；会显示发行版、CPU、正在运行的 systemd 版本、包管理器以及当前能否满足基础依赖。退出码 0 表示基础条件齐全，2 表示平台不兼容，3 表示仍有依赖要补。`--check` 是检查签名发行版本，不代表本机已通过安装预检。
 
