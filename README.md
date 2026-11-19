@@ -1,0 +1,32 @@
+# 东皇钟 · Linux 主机安全
+
+在 Linux 服务器的 SSH 终端安装。安装器识别发行版和 CPU，只下载对应的官方包。服务器不需要 GitHub 账号、Docker、Go 或 Node.js。
+
+```bash
+curl -fsSLo donghuang-install.sh https://raw.githubusercontent.com/1994qrq/donghuang-releases/main/install.sh && sudo bash donghuang-install.sh
+```
+
+请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定发行版可用 `--version v0.1.58`。发布主页提供固定到 Git commit 的安装入口；无论取哪个入口，程序包都必须通过安装器内置公钥的签名验证。
+
+**第一次登录。** 安装成功会显示版本、回环地址、SSH 转发命令及完整管理密钥。把转发命令复制到**自己的电脑**运行，用平时 SSH 登录的账号和服务器地址，保持窗口打开；然后在自己电脑的浏览器打开输出的 `http://127.0.0.1:端口`。SSH 加密这段连接，不必开放新的公网端口。已在服务器设置 HTTPS 反代的用户也可以继续使用自己的域名。不要把管理密钥放在 URL 里。
+
+登录后先看「总览」的采集状态，再到「资产」确认监听服务。默认监测告警。需要 AI 时再去「设置」填写接口；不填模型也能进行基础监测。首次资产和漏洞数据会在后台逐步出现。需要额外的系统审计集成时，可在完整发行包里执行 `sudo bash install.sh --enable-journal-audit`，该选项可能重启系统 journald。
+
+**日常管理。** 在服务器上运行 `sudo donghuang` 可见编号菜单，也可以直接执行：
+
+| 命令 | 用途 |
+|---|---|
+| `sudo donghuang status` | 运行状态、实际版本、地址和 SSH 命令 |
+| `sudo donghuang key` | 在交互终端显示完整管理密钥 |
+| `sudo donghuang reset-key` | 生成新密钥并显示；验证旧密钥失效 |
+| `sudo donghuang set-key` | 隐藏输入自选密钥（至少 32 个字符），再显示已生效的密钥 |
+| `sudo donghuang port 28083` | 先检查占用，再修改并验证端口；失败恢复原配置 |
+| `sudo donghuang update` | 下载并安装官方稳定版；同版本健康时不会重启 |
+
+无人值守安装不会把密钥写进安装日志。忘记密钥时登录服务器，运行 `sudo donghuang key` 即可。已有 `DONGHUANG_HOST_TOKEN` 环境覆盖时，查看以运行中服务为准，更换要在原环境配置中完成。改端口或更换密钥会短暂重启主服务；已开启独立观察或正在执行处置时，管理命令会拒绝中断它。若使用反代，改端口还要同步反代的上游和 Host，菜单不会替你改网站配置。
+
+**空间与更新。** 程序与管理命令在 `/usr/local/bin`，助手与版本在 `/usr/local/share/donghuang-host`，配置在 `/etc/donghuang`，主机私有数据在 `/var/lib/donghuang-host`。安装时只下载本机架构并清理临时目录。首次预检至少要求 `/var/tmp` 192 MiB、`/usr/local` 96 MiB、`/var/lib` 64 MiB 可用；升级还要按已有数据大小为备份预留空间。升级保留配置、密钥和处置记录，备份在 `/var/backups/donghuang/releases`。内存限制随主机容量选择，不需要额外的容器守护进程。
+
+同版文件损坏可重跑已下载的安装器并加 `--repair`；不会重新生成管理员密钥。上一次升级的本机回滚入口为 `sudo donghuang-update --rollback`，回滚后仍检查服务状态。它不等于撤销业务系统上的处置。常规卸载：在解压的已验证发行包中执行 `sudo bash uninstall.sh`，默认保留配置和证据。
+
+**适用环境。** x86_64 与 ARM64、systemd、nftables、Python ≥ 3.10。面向 Ubuntu 22.04/24.04、Debian 12/13、Alibaba Cloud Linux 3 及可获得相应依赖的 Rocky/Alma/RHEL/Anolis 等系统。能安装与某发行版所有漏洞数据均已覆盖是两件事；实测平台以发布页逐项列出的记录为准。32 位、Alpine/OpenRC 和普通容器不在支持范围。
