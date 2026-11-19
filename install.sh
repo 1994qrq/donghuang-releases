@@ -81,7 +81,7 @@ KEY
   if ! command -v openssl >/dev/null; then $check && fail '只读检查需要 openssl'; packages openssl; fi
   openssl dgst -sha256 -verify "$work/key.pem" -signature "$work/CHANNEL.sig" "$work/CHANNEL" >/dev/null || fail '发布签名无效，未安装'
   [ "$(wc -l < "$work/CHANNEL")" -eq 3 ] || fail '发布清单格式错误'
-  mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.58 || fail '版本低于公开发行下限'
+  mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.59 || fail '版本低于公开发行下限'
   [ "$requested" = latest ] || [ "$requested" = "$version" ] || fail '固定版本与签名不符'
   [ -z "$installed" ] || ! older "$version" "$installed" || fail '不允许自动降级，请使用本机备份恢复流程'
   for v in 1 2; do
