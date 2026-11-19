@@ -24,38 +24,113 @@ fetch() { curl --disable --fail --silent --show-error --location --proto '=https
 python_runtime() {
   local py
   for py in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
-    if command -v "$py" >/dev/null && "$py" -I -c 'import sys; sys.exit(sys.version_info < (3,10))'; then command -v "$py"; return 0; fi
+    if type -P "$py" >/dev/null && "$py" -I -B -S -c 'import sys; sys.exit(sys.version_info < (3,10))' 2>/dev/null; then type -P "$py"; return 0; fi
   done
   return 1
 }
+read_platform() {
+  local ID='' VERSION_ID='' PRETTY_NAME='' value
+  if [[ -r /etc/os-release ]]; then . /etc/os-release; fi
+  dh_id=$ID; dh_release=$VERSION_ID; dh_name=${PRETTY_NAME:-${ID:-未知发行版}}
+  dh_os=$(uname -s); dh_cpu=$(uname -m); family=''; arch=''
+  case "$dh_id" in ubuntu|debian) family=deb;; alinux|anolis|rocky|almalinux|rhel|centos|fedora) family=rpm;; esac
+  case "$dh_cpu" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+  dh_systemd=''; dh_init='未检测到以 systemd 为 PID 1 的 Linux 系统'
+  if [[ -d /run/systemd/system && -r /proc/1/comm && $(</proc/1/comm) = systemd ]]; then
+    # Ask the running manager. The systemctl client may already be newer than PID 1.
+    dh_init='无法读取运行中的 systemd 版本（请确认系统总线可访问）'
+    if value=$(LC_ALL=C /usr/bin/systemctl --system --no-pager show --property=Version 2>/dev/null) && [[ $value =~ ^Version=v?([0-9]{1,4})([^0-9].*)?$ ]]; then
+      dh_systemd=${BASH_REMATCH[1]}; dh_init="systemd $dh_systemd"
+    fi
+  fi
+}
+platform_reason() {
+  local major=${dh_release%%.*}
+  if [[ $dh_os != Linux || -z $family || -z $arch ]]; then
+    echo "当前不支持 $dh_os / $dh_name / $dh_cpu；需要支持的 Linux systemd 主机和 x86_64 或 ARM64 架构。"; return
+  fi
+  case "$dh_id:$major" in centos:7|rhel:7|centos:6|rhel:6)
+    echo "$dh_name / $dh_cpu（$dh_init）不在支持范围。主服务使用 StateDirectory=，需要 systemd 235 或更新版本；安装 dnf 或切换 Conda 不能解决。请在 Rocky Linux 9 或 Ubuntu 24.04 等受支持系统上安装。"; return;; esac
+  if [[ $major =~ ^[0-9]{1,3}$ ]] && { { [[ $dh_id = ubuntu ]] && ((10#$major < 22)); } || { [[ $dh_id = debian ]] && ((10#$major < 12)); }; }; then
+    echo "$dh_name 不在支持范围；需要 Ubuntu 22.04 或 Debian 12 及以上版本。"; return
+  fi
+  if [[ -z $dh_systemd ]]; then echo "$dh_name：$dh_init。"; return; fi
+  if ((10#$dh_systemd < 235)); then
+    echo "$dh_name / $dh_cpu 的 $dh_init 不支持本产品所需的 StateDirectory=（至少 systemd 235）。请使用受支持的系统；不建议单独更换系统的 systemd。"
+  fi
+}
+package_manager() {
+  local tool
+  # Only use distribution commands; a Conda environment is not a system package manager.
+  local PATH=/usr/sbin:/usr/bin:/sbin:/bin
+  case "$family" in
+    deb) type -P apt-get;;
+    rpm) for tool in dnf yum; do if type -P "$tool"; then return 0; fi; done; return 1;;
+    *) return 1;;
+  esac
+}
+runtime_packages() {
+  type -P nft >/dev/null || echo nftables
+  type -P python3 >/dev/null || echo python3
+  if ! python_runtime >/dev/null && { [[ $family = rpm ]] || type -P python3 >/dev/null; }; then echo python3.11; fi
+  return 0
+}
+rpm_repair_note() {
+  echo 'RPM 软件包自动修复另需通过 DNF4 执行器检查；yum 只用于安装依赖。'
+}
+diagnose_host() {
+  local reason mgr py cmd; local -a missing=() manual=()
+  read_platform; reason=$(platform_reason); mgr=$(package_manager) || mgr=''
+  echo "系统：$dh_name（ID=${dh_id:-未知} VERSION_ID=${dh_release:-未知}） / $dh_cpu"
+  echo "服务管理器：$dh_init；安装依赖用的包管理器：${mgr:-未找到}"
+  if [[ -n $reason ]]; then echo "不兼容：$reason"; return 2; fi
+  py=$(python_runtime) || py=''
+  echo "系统路径中的 Python 3.10+：${py:-未找到}；nft：$(type -P nft || echo 未找到)"
+  mapfile -t missing < <(runtime_packages)
+  type -P openssl >/dev/null || missing+=(openssl)
+  for cmd in systemctl journalctl flock useradd getent curl; do type -P "$cmd" >/dev/null || manual+=("$cmd"); done
+  if ((${#missing[@]})); then echo "安装依赖缺项：${missing[*]}"; fi
+  if ((${#manual[@]})); then echo "缺少基础系统命令：${manual[*]}"; fi
+  if [[ $family = rpm ]]; then rpm_repair_note; fi
+  if ((${#manual[@]})); then echo '请先通过发行版补齐基础命令后重试。'; return 3; fi
+  if ((${#missing[@]})); then
+    if [[ -n $mgr ]]; then echo "安装时将通过 $mgr 从已配置的软件源尝试补齐；诊断未访问软件源。"; else echo '没有可用包管理器；请通过发行版预装上列依赖后重试。'; fi
+    return 3
+  fi
+  echo '平台和基础依赖检查通过。安装时仍会检查磁盘、目录权限、端口与发行包签名。'
+}
+manager_for_dependencies() {
+  package_manager && return 0
+  local names=apt-get; if [[ $family = rpm ]]; then names='dnf 或 yum'; fi
+  fail "$dh_name 缺少依赖：$*；未找到可用的 $names。请通过发行版预装这些依赖后重试。"
+}
 packages() {
   [ "$#" -gt 0 ] || return 0
-  echo "从本机已配置的软件源安装缺少的依赖：$*"
-  if [ "$family" = deb ]; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get -q update && apt-get -q -y --no-install-recommends --no-remove install "$@"
-  else
-    dnf -y --setopt=install_weak_deps=False install "$@"
-  fi
+  local mgr; mgr=$(manager_for_dependencies "$@") || return 1
+  echo "通过 $mgr 从本机已配置的软件源安装缺少的依赖：$*"
+  case "${mgr##*/}" in
+    apt-get) DEBIAN_FRONTEND=noninteractive "$mgr" -q update && DEBIAN_FRONTEND=noninteractive "$mgr" -q -y --no-install-recommends --no-remove install "$@";;
+    dnf) "$mgr" -y --setopt=install_weak_deps=False install "$@";;
+    yum) "$mgr" -y install "$@";;
+  esac || fail "系统软件源未能用 ${mgr##*/} 安装：$*。请检查上方包管理器的错误；安装器不会更换软件源或替换系统 Python。"
 }
 install_main() {
   local repo=https://github.com/1994qrq/donghuang-releases requested=latest port=18083 chosen=false repair=false check=false sync=false
   local share=/usr/local/share/donghuang-host binary=/usr/local/bin/donghuang-host cli=/usr/local/bin/donghuang
+  local family arch dh_os dh_id dh_name dh_release dh_cpu dh_systemd dh_init reason
+  if [[ $# = 1 && $1 = --doctor ]]; then diagnose_host; return; fi
   while (($#)); do case "$1" in
     --version) [ "$#" -ge 2 ] && version_ok "$2" || fail '--version 需要 v主.次.修订'; requested=$2; shift 2;;
     --port) [ "$#" -ge 2 ] && [[ $2 =~ ^[1-9][0-9]{3,4}$ ]] && (( 10#$2 >= 1024 && 10#$2 <= 65535 )) || fail '--port 需要 1024–65535'; port=$2; chosen=true; shift 2;;
     --repair) repair=true; shift;; --check) check=true; shift;; --sync-channel) sync=true; shift;;
-    --help|-h) echo '东皇钟 Linux 安装器 [--port 端口] [--version vX.Y.Z] [--check 仅检查发布] [--repair 同版恢复程序]'; return;;
+    --doctor) fail '--doctor 请单独使用：bash donghuang-install.sh --doctor';;
+    --help|-h) echo '东皇钟 Linux 安装器 [--port 端口] [--version vX.Y.Z] [--check 仅检查发布] [--repair 同版恢复程序]；--doctor 单独使用：仅诊断本机，不联网、不安装、不需要 sudo'; return;;
     *) fail "未知选项：$1";; esac; done
-  [ "$(uname -s)" = Linux ] && [ -r /etc/os-release ] && [ -d /run/systemd/system ] || fail '需要运行 systemd 的 Linux 服务器，不支持普通 Docker 容器、macOS 或 Windows'
+  read_platform
+  if ! $check; then reason=$(platform_reason); [[ -z $reason ]] || fail "$reason"; fi
+  [[ $dh_os = Linux && -n $arch ]] || fail '仅提供 Linux x86_64 和 ARM64 安装包'
   [ "$(id -u)" = 0 ] || fail '请使用 sudo bash 运行安装器；已是 root 时可省略 sudo'
   trusted_command_paths
-  . /etc/os-release
-  local family arch
-  case "$ID" in ubuntu|debian) family=deb;; alinux|anolis|rocky|almalinux|rhel|centos|fedora) family=rpm;; *) fail "尚不支持 ${PRETTY_NAME:-$ID}";; esac
-  if { [ "$ID" = ubuntu ] && [[ ${VERSION_ID%%.*} =~ ^[0-9]+$ ]] && (( ${VERSION_ID%%.*} < 22 )); } || { [ "$ID" = debian ] && [[ ${VERSION_ID%%.*} =~ ^[0-9]+$ ]] && (( ${VERSION_ID%%.*} < 12 )); }; then fail '需要 Ubuntu 22.04 或 Debian 12 及以上版本'; fi
-  if [ "$family" = rpm ]; then command -v dnf >/dev/null || fail '需要使用 dnf 的受支持 RPM 发行版'; fi
-  case "$(uname -m)" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; *) fail '当前只提供 x86_64 和 ARM64 安装包';; esac
   local installed='' actual workroot=/var/tmp
   if [ -e "$binary" ] || [ -e "$share/VERSION" ]; then
     [ ! -L "$binary" ] && [ -f "$share/VERSION" ] || fail '已有安装不完整，请先核对版本文件及程序路径'
@@ -86,7 +161,7 @@ install_main() {
   # Only remove this mktemp directory. Preserve the path after the function returns.
   trap "rm -rf -- '$work'" EXIT
   if [ "$requested" = latest ]; then channel=$repo/releases/latest/download; else channel=$repo/releases/download/$requested; fi
-  echo "检测到 ${PRETTY_NAME:-$ID} / $arch，正在核对官方发布签名…"
+  echo "检测到 $dh_name / $arch，正在核对官方发布签名…"
   fetch "$channel/CHANNEL" "$work/CHANNEL" 4096; fetch "$channel/CHANNEL.sig" "$work/CHANNEL.sig" 512
   cat > "$work/key.pem" <<'KEY'
 -----BEGIN PUBLIC KEY-----
@@ -94,7 +169,7 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx71CEPmswZcpeT6X7WvMvme+RWWp
 H44e3KarePPVTkmcBuDfDA4TlptXFuWg/IQ/6rFihRLwEYkY1a9QhxJuWg==
 -----END PUBLIC KEY-----
 KEY
-  if ! command -v openssl >/dev/null; then $check && fail '只读检查需要 openssl'; packages openssl; fi
+  if ! command -v openssl >/dev/null; then if $check || $sync; then fail '签名检查需要系统 openssl；未安装依赖'; fi; packages openssl; fi
   openssl dgst -sha256 -verify "$work/key.pem" -signature "$work/CHANNEL.sig" "$work/CHANNEL" >/dev/null || fail '发布签名无效，未安装'
   [ "$(wc -l < "$work/CHANNEL")" -eq 3 ] || fail '发布清单格式错误'
   mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.62 || fail '版本低于公开发行下限'
@@ -115,7 +190,13 @@ KEY
     [ -x "$cli" ] && [ -f "$share/installed-files.sha256" ] && [ -f "$share/SHA256SUMS" ] && printf '%s  %s\n' "$sums" "$share/SHA256SUMS" | sha256sum -c --status && (cd / && sha256sum -c --status "$share/installed-files.sha256") && "$cli" status || fail '同版安装不完整或服务异常。可用 --repair 通过备份流程重装程序；不会重置业务配置或密钥。'
     echo '已是此版本，本次没有重启或重装。'; return 0
   fi
-  local archive="donghuang-host-linux-$arch.tar.gz" py mgr; local -a missing=()
+  local archive="donghuang-host-linux-$arch.tar.gz" py; local -a missing=()
+  # Give a useful answer before downloading a host archive that cannot be used.
+  # Do not mutate the package database until the downloaded archive is verified.
+  if ! $sync; then
+    mapfile -t missing < <(runtime_packages)
+    if ((${#missing[@]})); then manager_for_dependencies "${missing[@]}" >/dev/null; fi
+  fi
   fetch "$repo/releases/download/$version/$archive" "$work/$archive" "$archive_size"
   [ "$(wc -c < "$work/$archive")" -eq "$archive_size" ] && printf '%s  %s\n' "$actual" "$work/$archive" | sha256sum -c --status || fail '下载不完整或 SHA256 不符，未安装'
   if $sync; then
@@ -125,11 +206,6 @@ import sys,runpy,pathlib
 s=runpy.run_path(sys.argv[1]);s['stage'](pathlib.Path(sys.argv[2]),sys.argv[3],public=True)
 PY
     echo "CHANNEL $version $actual $arch"; return 0
-  fi
-  command -v nft >/dev/null || missing+=(nftables)
-  command -v python3 >/dev/null || missing+=(python3)
-  if ! python_runtime >/dev/null; then
-    if [ "$family" = rpm ]; then missing+=(python3.11); elif command -v python3 >/dev/null; then missing+=(python3.11); fi
   fi
   packages "${missing[@]}"; py=$(python_runtime) || fail '系统软件源未提供 Python 3.10+；请并行安装受支持的 Python 后重试，无需替换系统 Python'
   "$py" -I - "$work" "$archive" "$arch" "$version" <<'PY'
