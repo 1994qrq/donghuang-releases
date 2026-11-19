@@ -47,6 +47,7 @@ install_main() {
     installed=$(cat "$share/VERSION"); version_ok "$installed" || fail '原版本标记异常，未覆盖'
     $chosen && fail '已有安装请使用 sudo donghuang port 修改端口'
   fi
+  if [ -L /usr/bin/donghuang ] || { [ -e /usr/bin/donghuang ] && { [ ! -f /usr/bin/donghuang ] || ! cmp -s /usr/bin/donghuang <(printf '#!/bin/sh\n# Donghuang system command\nexec /usr/local/bin/donghuang "$@"\n'); }; }; then fail '/usr/bin/donghuang 已由其他程序使用，未覆盖'; fi
   if command -v donghuang >/dev/null || [ -e "$cli" ] || [ -L "$cli" ]; then
     [ "$(command -v donghuang || true)" = "$cli" ] && [ ! -L "$cli" ] && grep -Fxq '# Donghuang local administrator menu' "$cli" || fail 'donghuang 命令已由其他程序使用，未覆盖'
   fi
@@ -81,7 +82,7 @@ KEY
   if ! command -v openssl >/dev/null; then $check && fail '只读检查需要 openssl'; packages openssl; fi
   openssl dgst -sha256 -verify "$work/key.pem" -signature "$work/CHANNEL.sig" "$work/CHANNEL" >/dev/null || fail '发布签名无效，未安装'
   [ "$(wc -l < "$work/CHANNEL")" -eq 3 ] || fail '发布清单格式错误'
-  mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.59 || fail '版本低于公开发行下限'
+  mapfile -t lines < "$work/CHANNEL"; version=${lines[0]}; version_ok "$version" && ! older "$version" v0.1.61 || fail '版本低于公开发行下限'
   [ "$requested" = latest ] || [ "$requested" = "$version" ] || fail '固定版本与签名不符'
   [ -z "$installed" ] || ! older "$version" "$installed" || fail '不允许自动降级，请使用本机备份恢复流程'
   for v in 1 2; do

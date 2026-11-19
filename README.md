@@ -6,7 +6,7 @@
 curl -fsSLo donghuang-install.sh https://raw.githubusercontent.com/1994qrq/donghuang-releases/main/install.sh && sudo bash donghuang-install.sh
 ```
 
-请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定发行版可用 `--version v0.1.59`。每个发布页也提供固定到 Git commit 的安装命令。安装器内置 P-256 公钥，核验签名后才使用程序包；公钥 SHA-256（DER SPKI）是 `9d6b42d855aa64bcc61d49c34dbe206ecc425472ceb868b6ac7074c9cd373a95`。签名公钥更换时需要重新获取官方入口，离线保存的旧入口不会自行获得吊销信息。
+请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定发行版可用 `--version v0.1.61`。每个发布页也提供固定到 Git commit 的安装命令。安装器内置 P-256 公钥，核验签名后才使用程序包；公钥 SHA-256（DER SPKI）是 `9d6b42d855aa64bcc61d49c34dbe206ecc425472ceb868b6ac7074c9cd373a95`。签名公钥更换时需要重新获取官方入口，离线保存的旧入口不会自行获得吊销信息。
 
 **第一次登录。** 安装成功会显示版本、回环地址、SSH 转发命令及完整管理密钥。把转发命令复制到**自己的电脑**运行，用平时 SSH 登录的账号和服务器地址，保持窗口打开；然后在自己电脑的浏览器打开输出的 `http://127.0.0.1:端口`。SSH 加密这段连接，不必开放新的公网端口。已在服务器设置 HTTPS 反代的用户也可以继续使用自己的域名。不要把管理密钥放在 URL 里。
 
