@@ -1,6 +1,6 @@
 # 东皇钟 · Linux 主机安全
 
-当前稳定版：[v0.1.63](https://github.com/1994qrq/donghuang-releases/releases/tag/v0.1.63) · [实测系统和安装占用](COMPATIBILITY.md)
+[下载当前稳定版](https://github.com/1994qrq/donghuang-releases/releases/latest) · [实测系统和安装占用](COMPATIBILITY.md)
 
 在 Linux 服务器的 SSH 终端安装。安装器识别发行版和 CPU，只下载对应的官方包。服务器不需要 GitHub 账号、Docker、Go 或 Node.js。
 
@@ -33,6 +33,10 @@ curl -fsSLo donghuang-install.sh https://raw.githubusercontent.com/1994qrq/dongh
 
 **空间与更新。** 程序与管理命令在 `/usr/local/bin`，助手与版本在 `/usr/local/share/donghuang-host`，配置在 `/etc/donghuang`，主机私有数据在 `/var/lib/donghuang-host`。安装时只下载本机架构并清理临时目录。首次预检至少要求 `/var/tmp` 192 MiB、`/usr/local` 96 MiB、`/var/lib` 64 MiB 可用；升级还要按已有数据大小为备份预留空间。升级保留配置、密钥和处置记录，备份在 `/var/backups/donghuang/releases`。内存限制随主机容量选择，不需要额外的容器守护进程。
 
+从 v0.1.66 的控制台起，打开「版本与更新」，确认后台升级后就可以关闭页面。已有 AI 会话、巡检、扫描和修复会先完成；面板显示等待原因，条件满足后自动备份、安装。排队时可取消，开始备份或结束已授权的观察后不可取消。未勾选提前结束时，会等待连续观察自然结束。预约只适用于确认的版本和安装包，24 小时仍未开始会过期，不会强制安装；结果和备份位置仍在同一面板中。
+
 同版文件损坏可重跑已下载的安装器并加 `--repair`；不会重新生成管理员密钥。上一次升级的本机回滚入口为 `sudo donghuang-update --rollback`，回滚后仍检查服务状态。它不等于撤销业务系统上的处置。常规卸载：在解压的已验证发行包中执行 `sudo bash uninstall.sh`，默认保留配置和证据。
+
+**回退前先看漏洞历史大小。** 从 v0.1.64 候选起，资源充足时单份漏洞历史可超过 48 MiB。v0.1.63 和更早的读取器不支持这样的历史；回滚会说明原因并保留当前版本。可用 `stat -c '%s 字节' /var/lib/donghuang-host/vulnerabilities/snapshot.json` 查看。需要恢复时，优先选支持当前历史的修正版；如必须回旧版，请先保全现有证据，在隔离环境验证升级前完整备份及业务记录后再安排恢复。不要删除快照凑到旧版上限。
 
 **适用环境。** x86_64 与 ARM64、systemd、nftables、Python ≥ 3.10。面向 Ubuntu 22.04/24.04、Debian 12/13、Alibaba Cloud Linux 3 及可获得相应依赖的 Rocky/Alma/RHEL/Anolis 等系统。能安装与某发行版所有漏洞数据均已覆盖是两件事；实测平台以发布页逐项列出的记录为准。32 位、Alpine/OpenRC 和普通容器不在支持范围。
