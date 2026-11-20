@@ -8,7 +8,7 @@
 curl -fsSLo donghuang-install.sh https://raw.githubusercontent.com/1994qrq/donghuang-releases/main/install.sh && sudo bash donghuang-install.sh
 ```
 
-请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定发行版可用 `--version v0.1.63`。每个发布页也提供固定到 Git commit 的安装命令。安装器内置 P-256 公钥，核验签名后才使用程序包；公钥 SHA-256（DER SPKI）是 `9d6b42d855aa64bcc61d49c34dbe206ecc425472ceb868b6ac7074c9cd373a95`。签名公钥更换时需要重新获取官方入口，离线保存的旧入口不会自行获得吊销信息。
+请在自己的主目录运行；在 root 终端可省略 `sudo`。想先检查可用版本，在命令末尾加 `--check`。要指定首次端口，例如加 `--port 28083`。固定本版可用 `--version v0.1.66`。每个发布页也提供固定到 Git commit 的安装命令。安装器内置 P-256 公钥，核验签名后才使用程序包；公钥 SHA-256（DER SPKI）是 `9d6b42d855aa64bcc61d49c34dbe206ecc425472ceb868b6ac7074c9cd373a95`。签名公钥更换时需要重新获取官方入口，离线保存的旧入口不会自行获得吊销信息。
 
 **先看本机能否安装：** 下载最新的 `donghuang-install.sh` 后运行 `bash donghuang-install.sh --doctor`。诊断本身不联网、不安装、不需要 `sudo`；会显示发行版、CPU、正在运行的 systemd 版本、包管理器以及当前能否满足基础依赖。退出码 0 表示基础条件齐全，2 表示平台不兼容，3 表示仍有依赖要补。`--check` 是检查签名发行版本，不代表本机已通过安装预检。
 
@@ -34,6 +34,8 @@ curl -fsSLo donghuang-install.sh https://raw.githubusercontent.com/1994qrq/dongh
 **空间与更新。** 程序与管理命令在 `/usr/local/bin`，助手与版本在 `/usr/local/share/donghuang-host`，配置在 `/etc/donghuang`，主机私有数据在 `/var/lib/donghuang-host`。安装时只下载本机架构并清理临时目录。首次预检至少要求 `/var/tmp` 192 MiB、`/usr/local` 96 MiB、`/var/lib` 64 MiB 可用；升级还要按已有数据大小为备份预留空间。升级保留配置、密钥和处置记录，备份在 `/var/backups/donghuang/releases`。内存限制随主机容量选择，不需要额外的容器守护进程。
 
 从 v0.1.66 的控制台起，打开「版本与更新」，确认后台升级后就可以关闭页面。已有 AI 会话、巡检、扫描和修复会先完成；面板显示等待原因，条件满足后自动备份、安装。排队时可取消，开始备份或结束已授权的观察后不可取消。未勾选提前结束时，会等待连续观察自然结束。预约只适用于确认的版本和安装包，24 小时仍未开始会过期，不会强制安装；结果和备份位置仍在同一面板中。
+
+建议保留默认启用的 `donghuang-update-control.path` 和 `donghuang-update-control.timer`：任务完成时由路径事件唤醒助手，定时器每约 20 秒复查。手动停掉定时器后，连续操作可能错过一次唤醒而继续等待。
 
 同版文件损坏可重跑已下载的安装器并加 `--repair`；不会重新生成管理员密钥。上一次升级的本机回滚入口为 `sudo donghuang-update --rollback`，回滚后仍检查服务状态。它不等于撤销业务系统上的处置。常规卸载：在解压的已验证发行包中执行 `sudo bash uninstall.sh`，默认保留配置和证据。
 
